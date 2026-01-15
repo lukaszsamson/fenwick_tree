@@ -52,22 +52,16 @@ defmodule FenwickTree do
 
   The list is interpreted as a 1‑based array of values.
   """
-  @spec from([number]) :: t()
-  def from(list) when is_list(list) do
+  @spec from(nonempty_list(number())) :: t()
+  def from(list = [_ | _]) when is_list(list) do
     n = length(list)
 
     # Initialise an array with a dummy element at index 0
-    arr = :array.new(n + 1, default: 0)
-
-    # Load the raw values at positions 1..n
-    arr =
-      Enum.reduce(Enum.with_index(list, 1), arr, fn {val, idx}, acc ->
-        :array.set(idx, val, acc)
-      end)
+    tmp = :array.from_list([0 | list])
 
     # Convert the raw values into a proper Fenwick tree (O(n))
     tree =
-      Enum.reduce(1..n, arr, fn i, acc ->
+      Enum.reduce(1..n, tmp, fn i, acc ->
         j = i + lowbit(i)
 
         if j <= n do
@@ -153,20 +147,88 @@ defmodule FenwickTree do
   Returns the original list of values stored in the Fenwick tree.
   """
   @spec to_list(t()) :: [number()]
-  def to_list(%FenwickTree{size: size, tree: _arr} = tree) do
-    {values_reversed, _} =
-      1..size
-      |> Enum.reduce({[], 0}, fn index, {acc, last_prefix_sum} ->
-        prefix_sum = prefix_sum(tree, index)
-        value = prefix_sum - last_prefix_sum
-        {[value | acc], prefix_sum}
+  def to_list(%FenwickTree{size: n, tree: arr}) do
+    # 1.  Undo the build step: for every node i, subtract its value from
+    #     the parent j = i + lowbit(i) (when that parent exists).
+    tmp =
+      Enum.reduce(n..1//-1, arr, fn i, a ->
+        parent = i + lowbit(i)
+
+        if parent <= n do
+          v_parent = :array.get(parent, a)
+          v_i = :array.get(i, a)
+          :array.set(parent, v_parent - v_i, a)
+        else
+          a
+        end
       end)
 
-    Enum.reverse(values_reversed)
+    # 2.  What’s left in each cell is the raw element.
+    Enum.map(1..n, fn i -> :array.get(i, tmp) end)
+  end
+
+  @doc """
+  Replace the element at `index` with `value`.
+
+  Internally converts the assignment into a `delta` and delegates to
+  `update/3`, so it is still **O(log n)**.
+  """
+  @spec put(t(), pos_integer(), number) :: t()
+  def put(tree, index, value) do
+    delta = value - get(tree, index)
+    update(tree, index, delta)
+  end
+
+  @doc """
+  **Order-statistics query** – smallest index whose prefix sum is **≥ `target`**.
+
+  * Returns `nil` if `target` exceeds the total sum.
+  * Runs in **O(log n)** by binary-lifting through the implicit tree.
+  """
+  @spec find_prefix(t(), number()) :: pos_integer() | nil
+  def find_prefix(%FenwickTree{size: size, tree: arr} = tree, target)
+      when is_number(target) do
+    cond do
+      target <= 0 ->
+        1
+
+      target > prefix_sum(tree, size) ->
+        nil
+
+      true ->
+        # Start with the highest power of two ≤ size
+        bit = highest_bit(size)
+        find_prefix_inner(0, 0, bit, size, arr, target)
+    end
+  end
+
+  # recursion terminates when bit reaches zero; idx holds the answer
+  defp find_prefix_inner(idx, _sum, 0, _size, _arr, _target), do: idx + 1
+
+  defp find_prefix_inner(idx, sum, bit, size, arr, target) do
+    next = idx + bit
+
+    {idx, sum} =
+      if next <= size and sum + :array.get(next, arr) < target do
+        {next, sum + :array.get(next, arr)}
+      else
+        {idx, sum}
+      end
+
+    find_prefix_inner(idx, sum, bit >>> 1, size, arr, target)
   end
 
   # ----------------------------------------------------------------------
   # Private helper
   # ----------------------------------------------------------------------
+  @compile {:inline, lowbit: 1}
   defp lowbit(i), do: i &&& -i
+
+  # Highest power of two ≤ n
+  defp highest_bit(n), do: highest_bit(n, 1)
+
+  defp highest_bit(n, bit) do
+    next = bit <<< 1
+    if next <= n, do: highest_bit(n, next), else: bit
+  end
 end
