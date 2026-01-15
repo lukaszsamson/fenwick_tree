@@ -182,6 +182,12 @@ defmodule FenwickTree do
   @doc """
   **Order-statistics query** – smallest index whose prefix sum is **≥ `target`**.
 
+  ## Important constraint
+
+  This operation assumes all stored values are **non-negative**.
+  If any element is negative, prefix sums are not guaranteed to be monotonic and
+  the binary-lifting search is invalid.
+
   * Returns `nil` if `target` exceeds the total sum.
   * Runs in **O(log n)** by binary-lifting through the implicit tree.
   """

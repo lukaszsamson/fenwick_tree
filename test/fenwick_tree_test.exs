@@ -12,11 +12,13 @@ defmodule FenwickTreeTest do
   test "building and basic queries" do
     ft = FenwickTree.from([1, 2, 3, 4, 5])
 
+    assert FenwickTree.prefix_sum(ft, 0) == 0
     assert FenwickTree.prefix_sum(ft, 1) == 1
     assert FenwickTree.prefix_sum(ft, 3) == 6
     assert FenwickTree.prefix_sum(ft, 5) == 15
 
     assert FenwickTree.range_sum(ft, 2, 4) == 2 + 3 + 4
+    assert FenwickTree.range_sum(ft, 4, 4) == 4
     assert FenwickTree.get(ft, 4) == 4
   end
 
@@ -49,13 +51,38 @@ defmodule FenwickTreeTest do
     assert FenwickTree.prefix_sum(ft, 4) == 17
   end
 
-  test "find_prefix/2 finds the largest index with a prefix sum <= target" do
+  test "find_prefix/2 finds the smallest index with a prefix sum >= target" do
     ft = FenwickTree.from([1, 2, 3, 4, 5])
     assert FenwickTree.find_prefix(ft, 0) == 1
+    assert FenwickTree.find_prefix(ft, 1) == 1
     assert FenwickTree.find_prefix(ft, 6) == 3
     assert FenwickTree.find_prefix(ft, 10) == 4
     assert FenwickTree.find_prefix(ft, 15) == 5
     # exceeds total sum
     assert FenwickTree.find_prefix(ft, 16) == nil
+  end
+
+  test "find_prefix/2 handles zeros (non-negative values)" do
+    ft = FenwickTree.from([0, 0, 5])
+    assert FenwickTree.find_prefix(ft, 0) == 1
+    assert FenwickTree.find_prefix(ft, 1) == 3
+    assert FenwickTree.find_prefix(ft, 5) == 3
+    assert FenwickTree.find_prefix(ft, 6) == nil
+  end
+
+  test "guards for invalid indices" do
+    ft = FenwickTree.from([1, 2, 3])
+
+    assert_raise FunctionClauseError, fn ->
+      FenwickTree.prefix_sum(ft, 4)
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      FenwickTree.range_sum(ft, 2, 4)
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      FenwickTree.update(ft, 0, 1)
+    end
   end
 end
